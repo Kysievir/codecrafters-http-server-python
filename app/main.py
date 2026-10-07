@@ -13,7 +13,9 @@ def main():
         first_line = http_request.split("\r\n")[0]
         url = first_line.split(" ")[1]
 
-        if url.startswith("/echo/"):
+        if url == "/":
+            conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
+        elif url.startswith("/echo/"):
             message = url.removeprefix("/echo/")
             reply = (
                 "HTTP/1.1 200 OK\r\n"
