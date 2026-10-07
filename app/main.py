@@ -13,7 +13,7 @@ def main():
         first_line = http_request.split("\r\n")[0]
         url = first_line.split(" ")[1]
 
-        if url == "\\":
+        if url == "/":
             conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
         else:
             conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
