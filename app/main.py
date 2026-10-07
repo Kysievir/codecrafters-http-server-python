@@ -18,7 +18,7 @@ def main():
             reply = (
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: text/plain\r\n"
-                "Content-Length: 3\r\n"
+                f"Content-Length: {len(message)}\r\n"
                 "\r\n"
                 f"{message}"
             )
