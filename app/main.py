@@ -7,9 +7,16 @@ def main():
 
     # TODO: Uncomment the code below to pass the first stage
     
-    server_socket = socket.create_server(("localhost", 4221), reuse_port=True)
-    conn, address = server_socket.accept()
-    conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
+    with socket.create_server(("localhost", 4221), reuse_port=True) as server:
+        conn, address = server.accept()
+        http_request = conn.recv(2048).decode()
+        first_line = http_request.split("\r\n")[0]
+        url = first_line.split(" ")[1]
+
+        if url == "\\":
+            conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
+        else:
+            conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
 
 
 if __name__ == "__main__":
