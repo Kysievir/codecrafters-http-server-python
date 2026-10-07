@@ -13,8 +13,16 @@ def main():
         first_line = http_request.split("\r\n")[0]
         url = first_line.split(" ")[1]
 
-        if url == "/":
-            conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
+        if url.startswith("/echo/"):
+            message = url.removeprefix("/echo/")
+            reply = (
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 3\r\n"
+                "\r\n"
+                f"{message}"
+            )
+            conn.send(reply.encode())
         else:
             conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
 
