@@ -16,7 +16,6 @@ def main():
 
         headers = {}
         for i in range(1, len(parts) - 2):
-            print(parts[i])
             header, info = parts[i].split(": ")[:2]
             headers[header] = info
 
@@ -41,6 +40,7 @@ def main():
                 "\r\n"
                 f"{message}"
             )
+            conn.send(reply.encode())
         else:
             conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
 
