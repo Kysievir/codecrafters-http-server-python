@@ -16,6 +16,7 @@ def main():
 
         headers = {}
         for i in range(1, len(parts) - 1):
+            print(parts[i])
             header, info = parts[i].split(": ")[:2]
             headers[header] = info
 
