@@ -11,13 +11,28 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
         try:
             http_request = conn.recv(2048).decode()
             parts = http_request.split("\r\n")
-            first_line = parts[0]
-            url = first_line.split(" ")[1]
+
+            first_line = parts[0].split(" ")
+            request_type = first_line[0]
+            url = first_line[1]
+
+            content = ""
     
             headers = {}
-            for i in range(1, len(parts) - 2):
-                header, info = parts[i].split(": ")[:2]
-                headers[header] = info
+            is_content = False
+            for part in parts[1:]:
+                if is_content:
+                    content = part
+                    break
+                elif part == "":
+                    is_content = True
+                else:
+                    header, info = part.split(": ")[:2]
+                    headers[header] = info
+
+            # for i in range(1, len(parts) - 2):
+            #     header, info = parts[i].split(": ")[:2]
+            #     headers[header] = info
     
             if url == "/":
                 conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
@@ -44,17 +59,23 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
             elif url.startswith("/files/"):
                 file_path = file_root / url.removeprefix("/files/")
 
-                if file_path.is_file():
-                    body_bytes = file_path.read_bytes()
-                    header_bytes = (
-                        "HTTP/1.1 200 OK\r\n"
-                        "Content-Type: application/octet-stream\r\n"
-                        f"Content-Length: {len(body_bytes)}\r\n"
-                        "\r\n"
-                    ).encode("iso-8859-1")
-                    conn.send(header_bytes + body_bytes)
-                else:
-                    conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
+                if request_type == "GET":
+                    if file_path.is_file():
+                        body_bytes = file_path.read_bytes()
+                        header_bytes = (
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: application/octet-stream\r\n"
+                            f"Content-Length: {len(body_bytes)}\r\n"
+                            "\r\n"
+                        ).encode("iso-8859-1")
+                        conn.send(header_bytes + body_bytes)
+                    else:
+                        conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
+                elif request_type == "POST":
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_path.write_text(content, encoding="utf-8")
+
+                    conn.send("HTTP/1.1 201 Created\r\n\r\n".encode())
             else:
                 conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
         except Exception as e:
