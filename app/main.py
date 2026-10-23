@@ -17,7 +17,7 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
             url = first_line[1]
 
             content = ""
-    
+
             headers = {}
             is_content = False
             for part in parts[1:]:
@@ -30,16 +30,18 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
                     header, info = part.split(": ")[:2]
                     headers[header] = info
 
-            # for i in range(1, len(parts) - 2):
-            #     header, info = parts[i].split(": ")[:2]
-            #     headers[header] = info
-    
+            # Check if client supports gzip compression
+            accept_encoding = headers.get("Accept-Encoding", "")
+            encodings = [enc.strip() for enc in accept_encoding.split(",")]
+            encoding_header = "Content-Encoding: gzip\r\n" if "gzip" in encodings else ""
+
             if url == "/":
                 conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
             elif url.startswith("/echo/"):
                 message = url.removeprefix("/echo/")
                 reply = (
                     "HTTP/1.1 200 OK\r\n"
+                    f"{encoding_header}"
                     "Content-Type: text/plain\r\n"
                     f"Content-Length: {len(message)}\r\n"
                     "\r\n"
@@ -50,6 +52,7 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
                 message = headers["User-Agent"]
                 reply = (
                     "HTTP/1.1 200 OK\r\n"
+                    f"{encoding_header}"
                     "Content-Type: text/plain\r\n"
                     f"Content-Length: {len(message)}\r\n"
                     "\r\n"
@@ -64,6 +67,7 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
                         body_bytes = file_path.read_bytes()
                         header_bytes = (
                             "HTTP/1.1 200 OK\r\n"
+                            f"{encoding_header}"
                             "Content-Type: application/octet-stream\r\n"
                             f"Content-Length: {len(body_bytes)}\r\n"
                             "\r\n"
@@ -80,7 +84,7 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
                 conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
         except Exception as e:
             print(f"Error handling connection from {address}: {e}")
-        
+
 
 def main():
     print("Logs from your program will appear here!")
