@@ -9,92 +9,115 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
     file_root = args.directory
 
     with conn:
-        try:
-            http_request = conn.recv(2048).decode()
-            parts = http_request.split("\r\n")
-
-            first_line = parts[0].split(" ")
-            request_type = first_line[0]
-            url = first_line[1]
-
-            content = ""
-
-            headers = {}
-            is_content = False
-            for part in parts[1:]:
-                if is_content:
-                    content = part
+        while True:
+            try:
+                http_request = conn.recv(2048).decode()
+                if not http_request:
+                    # Client closed the connection
                     break
-                elif part == "":
-                    is_content = True
-                else:
-                    header, info = part.split(": ")[:2]
-                    headers[header] = info
 
-            # Check if client supports gzip compression
-            accept_encoding = headers.get("Accept-Encoding", "")
-            encodings = [enc.strip() for enc in accept_encoding.split(",")]
-            use_gzip = "gzip" in encodings
-            encoding_header = "Content-Encoding: gzip\r\n" if use_gzip else ""
+                parts = http_request.split("\r\n")
 
-            if url == "/":
-                conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
-            elif url.startswith("/echo/"):
-                message = url.removeprefix("/echo/")
-                body_bytes = message.encode("utf-8")
-                if use_gzip:
-                    body_bytes = gzip.compress(body_bytes)
+                first_line = parts[0].split(" ")
+                if len(first_line) < 2:
+                    break
+                request_type = first_line[0]
+                url = first_line[1]
 
-                header_bytes = (
-                    "HTTP/1.1 200 OK\r\n"
-                    f"{encoding_header}"
-                    "Content-Type: text/plain\r\n"
-                    f"Content-Length: {len(body_bytes)}\r\n"
-                    "\r\n"
-                ).encode("utf-8")
-                conn.send(header_bytes + body_bytes)
-            elif url == "/user-agent":
-                message = headers["User-Agent"]
-                body_bytes = message.encode("utf-8")
-                if use_gzip:
-                    body_bytes = gzip.compress(body_bytes)
+                content = ""
 
-                header_bytes = (
-                    "HTTP/1.1 200 OK\r\n"
-                    f"{encoding_header}"
-                    "Content-Type: text/plain\r\n"
-                    f"Content-Length: {len(body_bytes)}\r\n"
-                    "\r\n"
-                ).encode("utf-8")
-                conn.send(header_bytes + body_bytes)
-            elif url.startswith("/files/"):
-                file_path = file_root / url.removeprefix("/files/")
-
-                if request_type == "GET":
-                    if file_path.is_file():
-                        body_bytes = file_path.read_bytes()
-                        if use_gzip:
-                            body_bytes = gzip.compress(body_bytes)
-
-                        header_bytes = (
-                            "HTTP/1.1 200 OK\r\n"
-                            f"{encoding_header}"
-                            "Content-Type: application/octet-stream\r\n"
-                            f"Content-Length: {len(body_bytes)}\r\n"
-                            "\r\n"
-                        ).encode("iso-8859-1")
-                        conn.send(header_bytes + body_bytes)
+                headers = {}
+                is_content = False
+                for part in parts[1:]:
+                    if is_content:
+                        content = part
+                        break
+                    elif part == "":
+                        is_content = True
                     else:
-                        conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
-                elif request_type == "POST":
-                    file_path.parent.mkdir(parents=True, exist_ok=True)
-                    file_path.write_text(content, encoding="utf-8")
+                        header, info = part.split(": ")[:2]
+                        headers[header] = info
 
-                    conn.send("HTTP/1.1 201 Created\r\n\r\n".encode())
-            else:
-                conn.send("HTTP/1.1 404 Not Found\r\n\r\n".encode())
-        except Exception as e:
-            print(f"Error handling connection from {address}: {e}")
+                # Check if client supports gzip compression
+                accept_encoding = headers.get("Accept-Encoding", "")
+                encodings = [enc.strip() for enc in accept_encoding.split(",")]
+                use_gzip = "gzip" in encodings
+                encoding_header = "Content-Encoding: gzip\r\n" if use_gzip else ""
+
+                # Check if client requested to close the connection (prepares for next stage)
+                should_close = headers.get("Connection", "").lower() == "close"
+                connection_header = "Connection: close\r\n" if should_close else ""
+
+                if url == "/":
+                    reply = f"HTTP/1.1 200 OK\r\n{connection_header}\r\n"
+                    conn.send(reply.encode())
+                elif url.startswith("/echo/"):
+                    message = url.removeprefix("/echo/")
+                    body_bytes = message.encode("utf-8")
+                    if use_gzip:
+                        body_bytes = gzip.compress(body_bytes)
+
+                    header_bytes = (
+                        "HTTP/1.1 200 OK\r\n"
+                        f"{encoding_header}"
+                        f"{connection_header}"
+                        "Content-Type: text/plain\r\n"
+                        f"Content-Length: {len(body_bytes)}\r\n"
+                        "\r\n"
+                    ).encode("utf-8")
+                    conn.send(header_bytes + body_bytes)
+                elif url == "/user-agent":
+                    message = headers["User-Agent"]
+                    body_bytes = message.encode("utf-8")
+                    if use_gzip:
+                        body_bytes = gzip.compress(body_bytes)
+
+                    header_bytes = (
+                        "HTTP/1.1 200 OK\r\n"
+                        f"{encoding_header}"
+                        f"{connection_header}"
+                        "Content-Type: text/plain\r\n"
+                        f"Content-Length: {len(body_bytes)}\r\n"
+                        "\r\n"
+                    ).encode("utf-8")
+                    conn.send(header_bytes + body_bytes)
+                elif url.startswith("/files/"):
+                    file_path = file_root / url.removeprefix("/files/")
+
+                    if request_type == "GET":
+                        if file_path.is_file():
+                            body_bytes = file_path.read_bytes()
+                            if use_gzip:
+                                body_bytes = gzip.compress(body_bytes)
+
+                            header_bytes = (
+                                "HTTP/1.1 200 OK\r\n"
+                                f"{encoding_header}"
+                                f"{connection_header}"
+                                "Content-Type: application/octet-stream\r\n"
+                                f"Content-Length: {len(body_bytes)}\r\n"
+                                "\r\n"
+                            ).encode("iso-8859-1")
+                            conn.send(header_bytes + body_bytes)
+                        else:
+                            reply = f"HTTP/1.1 404 Not Found\r\n{connection_header}\r\n"
+                            conn.send(reply.encode())
+                    elif request_type == "POST":
+                        file_path.parent.mkdir(parents=True, exist_ok=True)
+                        file_path.write_text(content, encoding="utf-8")
+
+                        reply = f"HTTP/1.1 201 Created\r\n{connection_header}\r\n"
+                        conn.send(reply.encode())
+                else:
+                    reply = f"HTTP/1.1 404 Not Found\r\n{connection_header}\r\n"
+                    conn.send(reply.encode())
+
+                if should_close:
+                    break
+
+            except Exception as e:
+                print(f"Error handling connection from {address}: {e}")
+                break
 
 
 def main():
