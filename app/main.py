@@ -1,6 +1,7 @@
 import socket  # noqa: F401
 import threading
 import argparse
+import gzip
 from pathlib import Path
 
 
@@ -33,38 +34,48 @@ def handle_client(conn: socket.socket, address: tuple, args: argparse.Namespace)
             # Check if client supports gzip compression
             accept_encoding = headers.get("Accept-Encoding", "")
             encodings = [enc.strip() for enc in accept_encoding.split(",")]
-            encoding_header = "Content-Encoding: gzip\r\n" if "gzip" in encodings else ""
+            use_gzip = "gzip" in encodings
+            encoding_header = "Content-Encoding: gzip\r\n" if use_gzip else ""
 
             if url == "/":
                 conn.send("HTTP/1.1 200 OK\r\n\r\n".encode())
             elif url.startswith("/echo/"):
                 message = url.removeprefix("/echo/")
-                reply = (
+                body_bytes = message.encode("utf-8")
+                if use_gzip:
+                    body_bytes = gzip.compress(body_bytes)
+
+                header_bytes = (
                     "HTTP/1.1 200 OK\r\n"
                     f"{encoding_header}"
                     "Content-Type: text/plain\r\n"
-                    f"Content-Length: {len(message)}\r\n"
+                    f"Content-Length: {len(body_bytes)}\r\n"
                     "\r\n"
-                    f"{message}"
-                )
-                conn.send(reply.encode())
+                ).encode("utf-8")
+                conn.send(header_bytes + body_bytes)
             elif url == "/user-agent":
                 message = headers["User-Agent"]
-                reply = (
+                body_bytes = message.encode("utf-8")
+                if use_gzip:
+                    body_bytes = gzip.compress(body_bytes)
+
+                header_bytes = (
                     "HTTP/1.1 200 OK\r\n"
                     f"{encoding_header}"
                     "Content-Type: text/plain\r\n"
-                    f"Content-Length: {len(message)}\r\n"
+                    f"Content-Length: {len(body_bytes)}\r\n"
                     "\r\n"
-                    f"{message}"
-                )
-                conn.send(reply.encode())
+                ).encode("utf-8")
+                conn.send(header_bytes + body_bytes)
             elif url.startswith("/files/"):
                 file_path = file_root / url.removeprefix("/files/")
 
                 if request_type == "GET":
                     if file_path.is_file():
                         body_bytes = file_path.read_bytes()
+                        if use_gzip:
+                            body_bytes = gzip.compress(body_bytes)
+
                         header_bytes = (
                             "HTTP/1.1 200 OK\r\n"
                             f"{encoding_header}"
@@ -107,3 +118,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
